@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Old City, Philadelphia — open after dark</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,500&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F5F6F2; --fg:#1B2033; --muted:rgba(27,32,51,.6); --panel:rgba(245,246,242,.72); --line:rgba(27,32,51,.14);
+  --amber:#F0A23A;
+  --ui:"Figtree","PingFang SC","Hiragino Sans GB","Noto Sans SC","Microsoft YaHei",system-ui,sans-serif;
+  --display:"Fraunces","Songti SC","Noto Serif SC",Georgia,serif;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){ --bg:#0F1630; --fg:#E9ECF5; --muted:rgba(233,236,245,.6); --panel:rgba(15,22,48,.6); --line:rgba(233,236,245,.16); color-scheme:dark; }
+}
+:root[data-theme="dark"]{ --bg:#0F1630; --fg:#E9ECF5; --muted:rgba(233,236,245,.6); --panel:rgba(15,22,48,.6); --line:rgba(233,236,245,.16); color-scheme:dark; }
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:inherit}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--fg);font-family:var(--ui);overflow:hidden;-webkit-font-smoothing:antialiased}
+#map{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+#map.dragging{cursor:grabbing}
+
+.ui{position:fixed;z-index:2;color:var(--fg);transition:color .5s}
+.head{top:calc(env(safe-area-inset-top,0px) + 20px);left:calc(env(safe-area-inset-left,0px) + 24px);pointer-events:none;max-width:60vw}
+.head h1{font:500 15px/1.3 var(--ui);margin:0;letter-spacing:.01em}
+.head p{margin:2px 0 0;font-size:13px;color:var(--muted);transition:color .5s}
+.clock{font-family:var(--display);font-optical-sizing:auto;font-weight:300;font-size:clamp(64px,12vw,148px);line-height:.9;margin:14px 0 0;letter-spacing:-.03em;font-variant-numeric:tabular-nums;transition:color .5s}
+.when{font-size:15px;margin-top:8px;color:var(--muted);transition:color .5s}
+
+.count{top:calc(env(safe-area-inset-top,0px) + 20px);right:calc(env(safe-area-inset-right,0px) + 24px);text-align:right;pointer-events:none}
+.count b{display:block;font-family:var(--display);font-weight:300;font-size:44px;line-height:1;font-variant-numeric:tabular-nums}
+#nOpen{color:var(--amber)}
+.count small{font-size:13px;color:var(--muted)}
+.legend{margin-top:14px;display:grid;gap:6px;justify-items:end;font-size:12px;color:var(--muted)}
+.legend i{display:inline-block;vertical-align:middle;margin-left:8px;width:10px;height:10px;border-radius:50%}
+.lg-open{background:currentColor;box-shadow:0 0 8px 2px currentColor}
+.lg-closed{border:1.4px solid currentColor}
+.lg-na{width:4px!important;height:4px!important;background:currentColor;opacity:.6;margin-right:3px}
+.dash{margin:18px 0 0 auto;width:268px;text-align:left;padding:14px 14px 12px;border-radius:14px;background:var(--panel);
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid var(--line);transition:background .5s,border-color .5s}
+.dash h2{font:500 13px/1.3 var(--ui);margin:0 0 10px}
+.stack{display:flex;height:10px;border-radius:5px;overflow:hidden;background:color-mix(in srgb,var(--fg) 8%,transparent);margin-bottom:14px}
+.stack span{height:100%;transition:width .4s ease,background .5s}
+.rows{display:grid;gap:8px}
+.r{display:grid;grid-template-columns:100px 1fr 36px;align-items:center;gap:8px;font-size:12px;transition:opacity .3s}
+.r .lb{white-space:nowrap}
+.r .bar{height:6px;border-radius:3px;background:color-mix(in srgb,var(--fg) 8%,transparent);overflow:hidden}
+.r .bar i{display:block;height:100%;width:0;border-radius:3px;transition:width .4s ease,background .5s}
+.r .pc{text-align:right;font-variant-numeric:tabular-nums}
+.dash-note{margin-top:10px;font-size:11px;color:var(--muted)}
+
+.dock{left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 18px);width:min(880px,calc(100% - 24px));
+  background:var(--panel);backdrop-filter:blur(14px) saturate(1.2);-webkit-backdrop-filter:blur(14px) saturate(1.2);
+  border:1px solid var(--line);border-radius:18px;padding:14px 18px 12px;transition:background .5s,border-color .5s,color .5s}
+.row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.row+.row{margin-top:10px}
+.chips{display:flex;gap:4px;flex-wrap:wrap}
+.chip{font:500 13px/1 var(--ui);color:inherit;background:transparent;border:1px solid transparent;border-radius:999px;padding:7px 11px;cursor:pointer;opacity:.62;transition:opacity .2s,background .2s,border-color .2s}
+.chip:hover{opacity:1}
+.chip[aria-pressed="true"]{opacity:1;border-color:var(--line);background:color-mix(in srgb,var(--fg) 9%,transparent)}
+.chip:focus-visible,.play:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+.sep{flex:1}
+.cats .chip{font-size:12px;padding:6px 9px}
+.sw{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:0}
+
+.scrub{display:flex;align-items:center;gap:14px;margin-top:12px}
+.play{flex:none;width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:color-mix(in srgb,var(--fg) 6%,transparent);color:inherit;cursor:pointer;display:grid;place-items:center}
+.play svg{width:14px;height:14px;fill:currentColor}
+.track{position:relative;flex:1;height:58px}
+#hist{position:absolute;left:0;right:0;top:0;width:100%;height:40px;display:block}
+.ticks{position:absolute;left:0;right:0;bottom:0;height:14px;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+.ticks span{position:absolute;transform:translateX(-50%)}
+.ticks span:first-child{transform:none}.ticks span:last-child{transform:translateX(-100%)}
+input[type=range]{position:absolute;left:0;right:0;top:0;width:100%;height:46px;margin:0;background:transparent;-webkit-appearance:none;appearance:none;cursor:pointer}
+input[type=range]::-webkit-slider-runnable-track{height:46px;background:transparent}
+input[type=range]::-moz-range-track{height:46px;background:transparent}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:3px;height:46px;border-radius:2px;background:var(--amber);box-shadow:0 0 12px 2px rgba(240,162,58,.55)}
+input[type=range]::-moz-range-thumb{width:3px;height:46px;border:0;border-radius:2px;background:var(--amber);box-shadow:0 0 12px 2px rgba(240,162,58,.55)}
+input[type=range]:focus-visible{outline:2px solid var(--amber);outline-offset:4px;border-radius:4px}
+
+.tip{position:fixed;z-index:3;pointer-events:none;min-width:200px;max-width:280px;padding:12px 14px;border-radius:12px;
+  background:var(--panel);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid var(--line);color:var(--fg);
+  font-size:13px;line-height:1.5;opacity:0;transform:translateY(4px);transition:opacity .15s,transform .15s}
+.tip.on{opacity:1;transform:none}
+.tip h3{margin:0 0 2px;font:600 15px/1.3 var(--ui)}
+.tip .t{color:var(--muted);font-size:12px}
+.tip .s{margin-top:8px;font-weight:600}
+.tip .s.open{color:var(--amber)}
+.tip .hrs{color:var(--muted);font-size:12px;margin-top:2px}
+
+@media (max-width:640px){
+  .head{left:16px;top:calc(env(safe-area-inset-top,0px) + 14px)}
+  .count{right:16px;top:calc(env(safe-area-inset-top,0px) + 14px)}
+  .count b{font-size:32px}
+  .legend{display:none}
+  .dash{width:150px;margin-top:10px;padding:0;background:none;border:0;backdrop-filter:none;-webkit-backdrop-filter:none}
+  .dash h2,.rows,.dash-note{display:none}
+  .stack{margin:0;height:8px}
+  .dock{padding:12px 12px 10px;bottom:calc(env(safe-area-inset-bottom,0px) + 10px)}
+  .chip{padding:6px 8px;font-size:12px}
+  .cats{flex-wrap:nowrap;overflow-x:auto;width:100%;scrollbar-width:none}
+  .cats::-webkit-scrollbar{display:none}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<canvas id="map" aria-label="Map of Old City Philadelphia businesses; lit points are open"></canvas>
+
+<div class="ui head">
+  <h1>Old City, Philadelphia</h1>
+  <p>Who has the lights on, hour by hour</p>
+  <div class="clock" id="clock">21:30</div>
+  <div class="when" id="when">Friday night</div>
+</div>
+
+<div class="ui count" aria-live="polite">
+  <b><span id="nOpen">0</span>/<span id="nAll">0</span></b>
+  <small>places open now</small>
+  <div class="legend">
+    <div>Open<i class="lg-open"></i></div>
+    <div>Closed<i class="lg-closed"></i></div>
+    <div id="naNote">No hours listed<i class="lg-na"></i></div>
+  </div>
+  <div class="dash" aria-label="Open places by type">
+    <h2>Open now, by type</h2>
+    <div class="stack" id="stack"></div>
+    <div class="rows" id="rows"></div>
+    <div class="dash-note" id="dashNote"></div>
+  </div>
+</div>
+
+<div class="ui dock">
+  <div class="row">
+    <div class="chips" id="days" role="group" aria-label="Day of week"></div>
+    <div class="sep"></div>
+    <div class="chips cats" id="cats" role="group" aria-label="Filter by category"></div>
+  </div>
+  <div class="scrub">
+    <button class="play" id="play" aria-label="Play through the day"><svg viewBox="0 0 14 14" id="playIcon"><path d="M3 1.5v11l9.5-5.5z"/></svg></button>
+    <div class="track">
+      <canvas id="hist"></canvas>
+      <input type="range" id="time" min="0" max="1439" step="5" value="0" aria-label="Time of day">
+      <div class="ticks"><span style="left:0">0:00</span><span style="left:25%">6:00</span><span style="left:50%">12:00</span><span style="left:75%">18:00</span><span style="left:100%">24:00</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="tip" id="tip" role="tooltip"></div>
+
+<script>
+const DATA = {"places":[{"n":"3J's Cafe","a":"317 Market Street","c":"eat","t":"cafe","x":-75.1463556,"y":39.9504228,"iv":[[480,900],[1920,2340],[3360,3780],[4800,5220],[6240,6660],[7680,8100],[9120,9540]],"h":["8:00 AM – 3:00 PM","8:00 AM – 3:00 PM","8:00 AM – 3:00 PM","8:00 AM – 3:00 PM","8:00 AM – 3:00 PM","8:00 AM – 3:00 PM","8:00 AM – 3:00 PM"]},{"n":"7-Eleven","a":"242-244 Market Street","c":"eat","t":"convenience store","x":-75.1454446,"y":39.9497613,"iv":null,"h":null},{"n":"Allure Window Treatments","a":"137 North 3rd Street","c":"shop","t":"general contractor","x":-75.1449236,"y":39.9531417,"iv":[[600,1080],[2040,2520],[3480,3960],[4920,5400],[6360,6840],[7800,8280]],"h":["10:00 AM – 6:00 PM","10:00 AM – 6:00 PM","10:00 AM – 6:00 PM","10:00 AM – 6:00 PM","10:00 AM – 6:00 PM","10:00 AM – 6:00 PM","Closed"]},{"n":"Almanac","a":"310 Market Street Second Floor","c":"night","t":"bar","x":-75.1462398,"y":39.9500962,"iv":[[1020,1500],[2460,2940],[3900,4380],[5340,5820],[6780,7260],[8220,8700]],"h":["5:00 PM – 1:00 AM","5:00 PM – 1:00 AM","5:00 PM – 1:00 AM","5:00 PM – 1:00 AM","5:00 PM – 1:00 AM","5:00 PM – 1:00 AM","Closed"]},{"n":"Amada Philadelphia","a":"217-219 Chestnut Street","c":"night","t":"bar","x":-75.144893,"y":39.948655,"iv":[[990,1320],[2430,2760],[3720,4200],[5160,5640],[6600,7080],[7890,8520],[9330,9960]],"h":["4:30 – 10:00 PM","4:30 – 10:00 PM","2:00 – 10:00 PM","2:00 – 10:00 PM","2:00 – 10:00 PM","11:30 AM – 10:00 PM","11:30 AM – 10:00 PM"]},{"n":"Apple Hostels of Philadelphia","a":"33 Bank Street","c":"stay","t":"lodging","x":-75.1450552,"y":39.9488252,"iv":null,"h":null},{"n":"Arch Enemy Arts","a":"109 Arch Street","c":"culture","t":"art gallery","x":-75.1421522,"y":39.9519098,"iv":[[3480,3840],[4920,5280],[6360,6720],[7860,8220],[9300,9660]],"h":["Closed","Closed","10:00 AM – 4:00 PM","10:00 AM – 4:00 PM","10:00 AM – 4:00 PM","11:00 AM – 5:00 PM","11:00 AM – 5:00 PM"]},{"n":"Arden Theatre Company","a":"40 North 2nd Street","c":"other","t":"point of interest","x":-75.143647,"y":39.9511277,"iv":[[600,1080],[2040,2520],[3480,3960],[4920,5400],[6360,6840]],"h":["10:00 AM – 6:00 PM","10:00 AM – 6:00 PM","10:00 AM – 6:00 PM","10:00 AM – 6:00 PM","10:00 AM – 6:00 PM","Closed","Closed"]},{"n":"Argo Marine Supply Co., Inc.","a":"128 Chestnut Street","c":"shop","t":"point of interest","x":-75.1435114,"y":39.9481474,"iv":[[540,1020],[1980,2460],[3420,3900],[4860,5340],[6300,6780]],"h":["9:00 AM – 5:00 PM","9:00 AM – 5:00 PM","9:00 AM – 5:00 PM","9:00 AM – 5:00 PM","9:00 AM – 5:00 PM","Closed","Closed"]},{"n":"Art Star","a":"599 Market Street","c":"shop","t":"point of interest","x":-75.1498917,"y":39.9519884,"iv":[[660,960],[2100,2400],[3540,3840],[4980,5280],[6420,6720],[7860,8160],[9300,9600]],"h":["11:00 AM – 4:00 PM","11:00 AM – 4:00 PM","11:00 AM – 4:00 PM","11:00 AM – 4:00 PM","11:00 AM – 4:00 PM","11:00 AM – 4:00 PM","11:00 AM – 4:00 PM"]},{"n":"Artist & Craftsman Supply Philadelphia","a":"307 Market Street","c":"shop","t":"point of interest","x":-75.1460492,"y":39.9503815,"iv":[[600,1080],[2040,2520],[3480,3960],[4920,5400],[6360,6840],[7800,8280],[9240,9720]],"h":["10:00 AM – 6:00 PM","10:00 AM – 6:00 PM","10:00 AM – 6:00 PM","10:00 AM – 6:00 PM","10:00 AM – 6:00 PM","10:00 AM – 6:00 PM","10:00 AM – 6:00 PM"]},{"n":"Bella Bridesmaids","a":"30 Bank Street","c":"shop","t":"clothing store","x":-75.1453143,"y":39.94911,"iv":[[3540,4020],[4980,5460],[6420,6840],[7800,8220],[9240,9600]],"h":["Closed","Closed","11:00 AM – 7:00 PM","11:00 AM – 7:00 PM","11:00 AM – 6:00 PM","10:00 AM – 5:00 PM","10:00 AM – 4:00 PM"]},{"n":"Betsy Ross House","a":"239 Arch Street","c":"culture","t":"tourist attraction","x":-75.1446521,"y":39.9522267,"iv":[[600,1020],[2040,2460],[3480,3900],[4920,5340],[6360,6780],[7800,8220],[9240,9660]],"h":["10:00 AM – 5:00 PM","10:00 AM – 5:00 PM","10:00 AM – 5:00 PM","10:00 AM – 5:00 PM","10:00 AM – 5:00 PM","10:00 AM – 5:00 PM","10:00 AM – 5:00 PM"]},{"n":"Bleu Martini","a":"24 South 2nd Street","c":"night","t":"night club","x":-75.1440936,"y":39.9493361,"iv":[[1080,1560],[2520,3000],[3960,4440],[5400,5880],[6840,7320],[8280,8760],[9720,10200]],"h":["6:00 PM – 2:00 AM","6:00 PM – 2:00 AM","6:00 PM – 2:00 AM","6:00 PM – 2:00 AM","6:00 PM – 2:00 AM","6:00 PM – 2:00 AM","6:00 PM – 2:00 AM"]},{"n":"Boltcom Voice & Data","a":"102 Church Street #501","c":"shop","t":"point of interest","x":-75.1427014,"y":39.9503702,"iv":null,"h":null},{"n":"Brasil's Nightclub","a":"112 Chestnut Street","c":"night","t":"night club","x":-75.1430559,"y":39.9480488,"iv":[[4110,4440],[5550,5760],[6990,7320],[8430,8760]],"h":["Closed","Closed","8:30 PM – 2:00 AM","8:30 PM – 12:00 AM","8:30 PM – 2:00 AM","8:30 PM – 2:00 AM","Closed"]},{"n":"Brave New Worlds","a":"55 North 2nd Street","c":"shop","t":"book store","x":-75.1430228,"y":39.951395,"iv":[[660,1200],[2100,2640],[3540,4080],[4980,5520],[6420,6960],[7860,8400],[9300,9720]],"h":["11:00 AM – 8:00 PM","11:00 AM – 8:00 PM","11:00 AM – 8:00 PM","11:00 AM – 8:00 PM","11:00 AM – 8:00 PM","11:00 AM – 8:00 PM","11:00 AM – 6:00 PM"]},{"n":"Bridgeview Place Condominiums","a":"315 New Street","c":"other","t":"point of interest","x":-75.1452847,"y":39.9556499,"iv":null,"h":null},{"n":"Brownies Irish Pub","a":"46 South 2nd Street","c":"night","t":"bar","x":-75.1440767,"y":39.9488227,"iv":[[960,1560],[2400,3000],[3570,4440],[5010,5880],[6450,7320],[7890,8760],[9330,10200]],"h":["4:00 PM – 2:00 AM","4:00 PM – 2:00 AM","11:30 AM – 2:00 AM","11:30 AM – 2:00 AM","11:30 AM – 2:00 AM","11:30 AM – 2:00 AM","11:30 AM – 2:00 AM"]},{"n":"Bubble Tea Room","a":"319 Market Street","c":"eat","t":"restaurant","x":-75.14635,"y":39.9504387,"iv":[[600,1260],[2040,2400],[3480,4140],[4920,5580],[6360,7020],[7800,8460],[9240,9900]],"h":["10:00 AM – 9:00 PM","10:00 AM – 4:00 PM","10:00 AM – 9:00 PM","10:00 AM – 9:00 PM","10:00 AM – 9:00 PM","10:00 AM – 9:00 PM","10:00 AM – 9:00 PM"]},{"n":"Buddakan","a":"325 Chestnut Street","c":"eat","t":"restaurant","x":-75.1471998,"y":39.9490386,"iv":[[1020,1320],[2460,2760],[3900,4200],[5340,5640],[6780,7140],[8220,8580],[9600,9960]],"h":["5:00 – 10:00 PM","5:00 – 10:00 PM","5:00 – 10:00 PM","5:00 – 10:00 PM","5:00 – 11:00 PM","5:00 – 11:00 PM","4:00 – 10:00 PM"]},{"n":"Buffalo Billiards","a":"118 Chestnut Street","c":"night","t":"night club","x":-75.1432796,"y":39.9481848,"iv":[[960,1560],[2400,3000],[3840,4440],[5280,5880],[6720,7320],[8040,8760],[9480,10200]],"h":["4:00 PM – 2:00 AM","4:00 PM – 2:00 AM","4:00 PM – 2:00 AM","4:00 PM – 2:00 AM","4:00 PM – 2:00 AM","2:00 PM – 2:00 AM","2:00 PM – 2:00 AM"]},{"n":"Bureau of Alcohol Tobacco","a":"200 Chestnut Street","c":"shop","t":"point of interest","x":-75.1449313,"y":39.9482245,"iv":null,"h":null},{"n":"CADRÆ","a":"72 North 2nd Street","c":"shop","t":"clothing store","x":-75.1434279,"y":39.9518026,"iv":[[600,900],[2040,2340],[3480,3780],[4920,5220],[6360,6660],[7800,8100]],"h":["10:00 AM – 3:00 PM","10:00 AM – 3:00 PM","10:00 AM – 3:00 PM","10:00 AM – 3:00 PM","10:00 AM – 3:00 PM","10:00 AM – 3:00 PM","Closed"]},{"n":"CVS","a":"259 Market Street","c":"eat","t":"drugstore","x":-75.1455317,"y":39.950299,"iv":[[420,1200],[1860,2640],[3300,4080],[4740,5520],[6180,6960],[7620,8400],[9060,9840]],"h":["7:00 AM – 8:00 PM","7:00 AM – 8:00 PM","7:00 AM – 8:00 PM","7:00 AM – 8:00 PM","7:00 AM – 8:00 PM","7:00 AM – 8:00 PM","7:00 AM – 8:00 PM"]},{"n":"CVS Pharmacy","a":"259 Market Street","c":"shop","t":"pharmacy","x":-75.1455317,"y":39.950299,"iv":[[540,810],[840,1140],[1980,2250],[2280,2580],[3420,3690],[3720,4020],[4860,5130],[5160,5460],[6300,6570],[6600,6900],[7800,8010],[8040,8280],[9300,9450],[9480,9660]],"h":["9:00 AM – 1:30 PM, 2:00 – 7:00 PM","9:00 AM – 1:30 PM, 2:00 – 7:00 PM","9:00 AM – 1:30 PM, 2:00 – 7:00 PM","9:00 AM – 1:30 PM, 2:00 – 7:00 PM","9:00 AM – 1:30 PM, 2:00 – 7:00 PM","10:00 AM – 1:30 PM, 2:00 – 6:00 PM","11:00 AM – 1:30 PM, 2:00 – 5:00 PM"]},{"n":"CVS Photo","a":"259 Market Street","c":"shop","t":"electronics store","x":-75.1455317,"y":39.950299,"iv":[[420,1200],[1860,2640],[3300,4080],[4740,5520],[6180,6960],[7620,8400],[9060,9840]],"h":["7:00 AM – 8:00 PM","7:00 AM – 8:00 PM","7:00 AM – 8:00 PM","7:00 AM – 8:00 PM","7:00 AM – 8:00 PM","7:00 AM – 8:00 PM","7:00 AM – 8:00 PM"]},{"n":"Cafe Ole","a":"147 North 3rd Street","c":"eat","t":"cafe","x":-75.144762,"y":39.953539,"iv":[[480,1080],[1920,2520],[3360,3960],[4800,5400],[6240,6840],[7680,8280],[9120,9720]],"h":["8:00 AM – 6:00 PM","8:00 AM – 6:00 PM","8:00 AM – 6:00 PM","8:00 AM – 6:00 PM","8:00 AM – 6:00 PM","8:00 AM – 6:00 PM","8:00 AM – 6:00 PM"]},{"n":"Café Couleur Banh mì","a":"323 Arch Street","c":"eat","t":"cafe","x":-75.1461989,"y":39.9524015,"iv":null,"h":null},{"n":"Café Square One","a":"311 Market Street","c":"eat","t":"cafe","x":-75.146141,"y":39.9503713,"iv":[[420,1020],[1860,2460],[3300,3900],[4740,5340],[6180,6780],[7680,8100],[9120,9540]],"h":["7:00 AM – 5:00 PM","7:00 AM – 5:00 PM","7:00 AM – 5:00 PM","7:00 AM – 5:00 PM","7:00 AM – 5:00 PM","8:00 AM – 3:00 PM","8:00 AM – 3:00 PM"]},{"n":"Café Tolia","a":"26 North 3rd Street","c":"eat","t":"cafe","x":-75.1458069,"y":39.9509946,"iv":[[1920,2400],[3360,3840],[4800,5280],[6240,6720],[7680,8160],[9120,9600]],"h":["Closed","8:00 AM – 4:00 PM","8:00 AM – 4:00 PM","8:00 AM – 4:00 PM","8:00 AM – 4:00 PM","8:00 AM – 4:00 PM","8:00 AM – 4:00 PM"]},{"n":"Calandrino's Old City Vino","a":"110 North 2nd Street","c":"night","t":"liquor store","x":-75.1434789,"y":39.9523575,"iv":[[3900,4200],[5340,5640],[6780,7080],[8040,8520]],"h":["Closed","Closed","5:00 – 10:00 PM","5:00 – 10:00 PM","5:00 – 10:00 PM","2:00 – 10:00 PM","Closed"]},{"n":"Campo's Deli","a":"214 Market Street","c":"eat","t":"meal takeaway","x":-75.1442638,"y":39.9498303,"iv":[[480,1320],[1920,2760],[3360,4200],[4800,5640],[6240,7080],[7680,8520],[9120,9900]],"h":["8:00 AM – 10:00 PM","8:00 AM – 10:00 PM","8:00 AM – 10:00 PM","8:00 AM – 10:00 PM","8:00 AM – 10:00 PM","8:00 AM – 10:00 PM","8:00 AM – 9:00 PM"]},{"n":"Capital Access Inc","a":"325 Chestnut Street #917","c":"other","t":"point of interest","x":-75.147154,"y":39.949088,"iv":null,"h":null},{"n":"Career Concepts, Inc.","a":"325 Chestnut Street","c":"other","t":"point of interest","x":-75.1471045,"y":39.9490423,"iv":null,"h":null},{"n":"Christian Science Reading Room & Church","a":"225 Chestnut Street","c":"culture","t":"church","x":-75.1449938,"y":39.9486811,"iv":[[660,960],[2100,2400],[3720,3840],[4980,5280],[6420,6720],[7860,8160],[9300,9360]],"h":["11:00 AM – 4:00 PM","11:00 AM – 4:00 PM","2:00 – 4:00 PM","11:00 AM – 4:00 PM","11:00 AM – 4:00 PM","11:00 AM – 4:00 PM","11:00 AM – 12:00 PM"]},{"n":"City Fitness - Old City","a":"45 North 3rd Street","c":"eat","t":"gym","x":-75.1452333,"y":39.9515216,"iv":[[300,1320],[1740,2760],[3180,4200],[4620,5640],[6060,7020],[7560,8400],[9000,9840]],"h":["5:00 AM – 10:00 PM","5:00 AM – 10:00 PM","5:00 AM – 10:00 PM","5:00 AM – 10:00 PM","5:00 AM – 9:00 PM","6:00 AM – 8:00 PM","6:00 AM – 8:00 PM"]},{"n":"Club LB","a":"15 South 3rd Street","c":"night","t":"night club","x":-75.1454769,"y":39.9496537,"iv":[[8520,8760]],"h":["Closed","Closed","Closed","Closed","Closed","10:00 PM – 2:00 AM","Closed"]},{"n":"Coins Eatery","a":"400 Arch Street","c":"eat","t":"restaurant","x":-75.1473609,"y":39.9518939,"iv":[[390,1320],[1830,2760],[3270,4200],[4710,5640],[6150,7080],[7590,8520],[9030,9960]],"h":["6:30 AM – 10:00 PM","6:30 AM – 10:00 PM","6:30 AM – 10:00 PM","6:30 AM – 10:00 PM","6:30 AM – 10:00 PM","6:30 AM – 10:00 PM","6:30 AM – 10:00 PM"]},{"n":"Counsel Press","a":"111 South Independence Ml East #702","c":"other","t":"point of interest","x":-75.1480623,"y":39.9497563,"iv":[[540,1020],[1980,2460],[3420,3900],[4860,5340],[6300,6780]],"h":["9:00 AM – 5:00 PM","9:00 AM – 5:00 PM","9:00 AM – 5:00 PM","9:00 AM – 5:00 PM","9:00 AM – 5:00 PM","Closed","Closed"]},{"n":"Cuba Libre Restaurant & Rum Bar","a":"10 South 2nd Street","c":"eat","t":"restaurant","x":-75.1439376,"y":39.9496092,"iv":[[960,1260],[2400,2700],[3840,4140],[5280,5580],[6720,7320],[7920,8760],[9360,9900]],"h":["4:00 – 9:00 PM","4:00 – 9:00 PM","4:00 – 9:00 PM","4:00 – 9:00 PM","4:00 PM – 2:00 AM","12:00 PM – 2:00 AM","12:00 – 9:00 PM"]},{"n":"Diener Brick Co","a":"Philadelphia","c":"shop","t":"store","x":-75.145782,"y":39.9493801,"iv":null,"h":null},{"n":"Drake Speciale LLC","a":"221 Chestnut Street #200","c":"other","t":"lawyer","x":-75.1449839,"y":39.9486281,"iv":[[540,1020],[1980,2460],[3420,3900],[4860,5340],[6300,6780]],"h":["9:00 AM – 5:00 PM","9:00 AM – 5:00 PM","9:00 AM – 5:00 PM","9:00 AM – 5:00 PM","9:00 AM – 5:00 PM","Closed","Closed"]},{"n":"Durant & Durant","a":"325 Chestnut Street #1116","c":"other","t":"lawyer","x":-75.147154,"y":39.949088,"iv":null,"h":null},{"n":"Eggcellent Cafe","a":"113 Chestnut Street","c":"eat","t":"cafe","x":-75.1430937,"y":39.9484413,"iv":[[480,900],[1920,2340],[3360,3780],[4800,5220],[6240,6660],[7680,8100],[9120,9540]],"h":["8:00 AM – 3:00 PM","8:00 AM – 3:00 PM","8:00 AM – 3:00 PM","8:00 AM – 3:00 PM","8:00 AM – 3:00 PM","8:00 AM – 3:00 PM","8:00 AM – 3:00 PM"]},{"n":"Elfreth's Alley Museum","a":"126 Elfreth's Alley","c":"culture","t":"tourist attraction","x":-75.1424391,"y":39.9527178,"iv":[[6480,6720],[7920,8160],[9360,9600]],"h":["Closed","Closed","Closed","Closed","12:00 – 4:00 PM","12:00 – 4:00 PM","12:00 – 4:00 PM"]},{"n":"FINE WINE & GOOD SPIRITS","a":"32 South 2nd Street","c":"night","t":"liquor store","x":-75.1440436,"y":39.9491216,"iv":[[540,1260],[1980,2700],[3420,4140],[4860,5580],[6300,7020],[7740,8460],[9300,9780]],"h":["9:00 AM – 9:00 PM","9:00 AM – 9:00 PM","9:00 AM – 9:00 PM","9:00 AM – 9:00 PM","9:00 AM – 9:00 PM","9:00 AM – 9:00 PM","11:00 AM – 7:00 PM"]},{"n":"Family Friendly Penthouse","a":"205 Race Street #16d","c":"stay","t":"lodging","x":-75.1432262,"y":39.9539294,"iv":null,"h":null},{"n":"Fireman's Hall Museum","a":"147 North 2nd Street","c":"culture","t":"tourist attraction","x":-75.1426468,"y":39.9532585,"iv":[[2040,2400],[3480,3840],[4920,5280],[6360,6720],[7800,8160],[9240,9600]],"h":["Closed","10:00 AM – 4:00 PM","10:00 AM – 4:00 PM","10:00 AM – 4:00 PM","10:00 AM – 4:00 PM","10:00 AM – 4:00 PM","10:00 AM – 4:00 PM"]},{"n":"Fork","a":"306 Market Street","c":"eat","t":"restaurant","x":-75.146124,"y":39.949994,"iv":[[1020,1260],[2130,2700],[3570,4140],[5010,5580],[6450,7080],[7860,8520],[9300,9900]],"h":["5:00 – 9:00 PM","11:30 AM – 9:00 PM","11:30 AM – 9:00 PM","11:30 AM – 9:00 PM","11:30 AM – 10:00 PM","11:00 AM – 10:00 PM","11:00 AM – 9:00 PM"]},{"n":"Forsythia","a":"233 Chestnut Street","c":"night","t":"night club","x":-75.1454168,"y":39.9487084,"iv":[[2460,2760],[3900,4200],[5340,5640],[6780,7080],[8220,8520],[9660,9900]],"h":["Closed","5:00 – 10:00 PM","5:00 – 10:00 PM","5:00 – 10:00 PM","5:00 – 10:00 PM","5:00 – 10:00 PM","5:00 – 9:00 PM"]},{"n":"Francis J Purcell Inc","a":"251 North 3rd Street","c":"shop","t":"home goods store","x":-75.144349,"y":39.955431,"iv":[[2100,2460],[3540,3900],[4980,5340],[6420,6780],[7860,8220]],"h":["Closed","11:00 AM – 5:00 PM","11:00 AM – 5:00 PM","11:00 AM – 5:00 PM","11:00 AM – 5:00 PM","11:00 AM – 5:00 PM","Closed"]},{"n":"FringeArts","a":"140 North Christopher Columbus Boulevard","c":"night","t":"bar","x":-75.1403892,"y":39.9533194,"iv":null,"h":null},{"n":"Glory Beer Bar & Kitchen","a":"126 Chestnut Street","c":"night","t":"bar","x":-75.1435458,"y":39.9481117,"iv":[[960,1560],[2400,3000],[3840,4440],[5040,5880],[6480,7320],[7920,8760],[9360,10200]],"h":["4:00 PM – 2:00 AM","4:00 PM – 2:00 AM","4:00 PM – 2:00 AM","12:00 PM – 2:00 AM","12:00 PM – 2:00 AM","12:00 PM – 2:00 AM","12:00 PM – 2:00 AM"]},{"n":"Grossman Furniture","a":"206 Arch Street","c":"shop","t":"furniture store","x":-75.1436564,"y":39.9517985,"iv":[[570,1050],[2010,2490],[3450,4080],[4890,5370],[6330,6810],[7770,8250]],"h":["9:30 AM – 5:30 PM","9:30 AM – 5:30 PM","9:30 AM – 8:00 PM","9:30 AM – 5:30 PM","9:30 AM – 5:30 PM","9:30 AM – 5:30 PM","Closed"]},{"n":"Han Dynasty - Old City","a":"110 Chestnut Street","c":"eat","t":"restaurant","x":-75.1430342,"y":39.9480692,"iv":[[720,1290],[2160,2730],[3600,4170],[5040,5610],[6480,7170],[7920,8610],[9360,9930]],"h":["12:00 – 9:30 PM","12:00 – 9:30 PM","12:00 – 9:30 PM","12:00 – 9:30 PM","12:00 – 11:30 PM","12:00 – 11:30 PM","12:00 – 9:30 PM"]},{"n":"Harry Horn Inc","a":"120 Arch Street","c":"shop","t":"store","x":-75.142414,"y":39.951732,"iv":[[2040,2430],[3480,3870],[4920,5310],[6360,6750],[7800,8190]],"h":["Closed","10:00 AM – 4:30 PM","10:00 AM – 4:30 PM","10:00 AM – 4:30 PM","10:00 AM – 4:30 PM","10:00 AM – 4:30 PM","Closed"]},{"n":"Historic St George's United Methodist Church","a":"235 North 4th Street","c":"culture","t":"church","x":-75.1458565,"y":39.9552537,"iv":[[1980,2280],[3420,3720],[4860,5160],[7740,8040]],"h":["Closed","9:00 AM – 2:00 PM","9:00 AM – 2:00 PM","9:00 AM – 2:00 PM","Closed","9:00 AM – 2:00 PM","Closed"]},{"n":"Holiday Inn Express Philadelphia - Penns Landing by IHG","a":"100 North Christopher Columbus Boulevard","c":"stay","t":"gym","x":-75.140442,"y":39.9528286,"iv":null,"h":null},{"n":"Independence National Historical Park","a":"Philadelphia","c":"culture","t":"tourist attraction","x":-75.1497319,"y":39.9495312,"iv":null,"h":null},{"n":"Independence Park Hotel","a":"235 Chestnut Street","c":"stay","t":"lodging","x":-75.1453861,"y":39.9488312,"iv":null,"h":null},{"n":"Independence Seaport Museum","a":"211 South Christopher Columbus Boulevard","c":"culture","t":"museum","x":-75.140765,"y":39.945851,"iv":[[600,1020],[2040,2460],[3480,3900],[4920,5340],[6360,6780],[7800,8220],[9240,9660]],"h":["10:00 AM – 5:00 PM","10:00 AM – 5:00 PM","10:00 AM – 5:00 PM","10:00 AM – 5:00 PM","10:00 AM – 5:00 PM","10:00 AM – 5:00 PM","10:00 AM – 5:00 PM"]},{"n":"Independence Visitor Center","a":"599 Market Street","c":"culture","t":"tourist attraction","x":-75.1499212,"y":39.9514196,"iv":[[540,1080],[1980,2520],[3420,3960],[4860,5400],[6300,6840],[7740,8280],[9180,9720]],"h":["9:00 AM – 6:00 PM","9:00 AM – 6:00 PM","9:00 AM – 6:00 PM","9:00 AM – 6:00 PM","9:00 AM – 6:00 PM","9:00 AM – 6:00 PM","9:00 AM – 6:00 PM"]},{"n":"Independent Hardware, Inc.","a":"14 South Front Street","c":"shop","t":"hardware store","x":-75.1423829,"y":39.949254,"iv":[[510,1020],[1950,2460],[3390,3900],[4830,5340],[6270,6780]],"h":["8:30 AM – 5:00 PM","8:30 AM – 5:00 PM","8:30 AM – 5:00 PM","8:30 AM – 5:00 PM","8:30 AM – 5:00 PM","Closed","Closed"]},{"n":"Infusion Lounge - Philly's Best Cocktails, Hookahs & Cigars","a":"16 South 2nd Street 2nd Floor","c":"night","t":"bar","x":-75.144008,"y":39.9495372,"iv":[[1080,1440],[2520,2880],[3960,4440],[5400,5880],[7020,7320],[8460,8760],[9720,10200]],"h":["6:00 PM – 12:00 AM","6:00 PM – 12:00 AM","6:00 PM – 2:00 AM","6:00 PM – 2:00 AM","9:00 PM – 2:00 AM","9:00 PM – 2:00 AM","6:00 PM – 2:00 AM"]},{"n":"Khyber Pass Pub","a":"56 South 2nd Street","c":"night","t":"bar","x":-75.1441398,"y":39.9486537,"iv":[[660,1560],[2100,3000],[3540,4440],[4980,5880],[6420,7320],[7800,8760],[9240,10200]],"h":["11:00 AM – 2:00 AM","11:00 AM – 2:00 AM","11:00 AM – 2:00 AM","11:00 AM – 2:00 AM","11:00 AM – 2:00 AM","10:00 AM – 2:00 AM","10:00 AM – 2:00 AM"]},{"n":"Kimpton Hotel Monaco Philadelphia","a":"433 Chestnut Street","c":"stay","t":"lodging","x":-75.1488833,"y":39.9491415,"iv":null,"h":null},{"n":"LEMA studio","a":"140 North 3rd Street","c":"shop","t":"furniture store","x":-75.1451689,"y":39.953396,"iv":[[600,1080],[2040,2520],[3480,3960],[4920,5400],[6360,6840],[7800,8280]],"h":["10:00 AM – 6:00 PM","10:00 AM – 6:00 PM","10:00 AM – 6:00 PM","10:00 AM – 6:00 PM","10:00 AM – 6:00 PM","10:00 AM – 6:00 PM","Closed"]},{"n":"La Famiglia Ristorante","a":"8 South Front Street","c":"eat","t":"restaurant","x":-75.1423166,"y":39.9493909,"iv":[[2460,2700],[3900,4140],[5340,5580],[6780,7020],[8220,8460]],"h":["Closed","5:00 – 9:00 PM","5:00 – 9:00 PM","5:00 – 9:00 PM","5:00 – 9:00 PM","5:00 – 9:00 PM","Closed"]},{"n":"La Tienda","a":"105 Chestnut Street","c":"eat","t":"convenience store","x":-75.1427605,"y":39.9483083,"iv":[[480,1080],[1920,2640],[3360,3960],[4830,5400],[6240,6840],[7680,8280]],"h":["8:00 AM – 6:00 PM","8:00 AM – 8:00 PM","8:00 AM – 6:00 PM","8:30 AM – 6:00 PM","8:00 AM – 6:00 PM","8:00 AM – 6:00 PM","Closed"]},{"n":"Landmark's Ritz Five","a":"214 Walnut Street","c":"culture","t":"movie theater","x":-75.1455597,"y":39.9468861,"iv":null,"h":null},{"n":"Las Bugambilias","a":"15 South 3rd Street","c":"eat","t":"restaurant","x":-75.1454627,"y":39.9496917,"iv":[[1020,1260],[2460,2700],[3900,4140],[4980,5580],[6420,7320],[7800,8760],[9360,9840]],"h":["5:00 – 9:00 PM","5:00 – 9:00 PM","5:00 – 9:00 PM","11:00 AM – 9:00 PM","11:00 AM – 2:00 AM","10:00 AM – 2:00 AM","12:00 – 8:00 PM"]},{"n":"Li Puma Michael","a":"325 Chestnut Street","c":"other","t":"lawyer","x":-75.147154,"y":39.949088,"iv":null,"h":null},{"n":"Liberty Garden","a":"50 North Independence Mall East","c":"night","t":"bar","x":-75.1491401,"y":39.9518206,"iv":[[660,1260],[2100,2700],[3540,4140],[4980,5580],[6420,7020],[7860,8460],[9300,9720]],"h":["11:00 AM – 9:00 PM","11:00 AM – 9:00 PM","11:00 AM – 9:00 PM","11:00 AM – 9:00 PM","11:00 AM – 9:00 PM","11:00 AM – 9:00 PM","11:00 AM – 6:00 PM"]},{"n":"MOKO Organic Hair Studio","a":"Best Organic Salon, Best Haircolor Old City, 55 North 3rd Street","c":"shop","t":"beauty salon","x":-75.1449041,"y":39.951886,"iv":[[2160,2520],[3480,4080],[4920,5520],[6360,6960],[7800,8160]],"h":["Closed","12:00 – 6:00 PM","10:00 AM – 8:00 PM","10:00 AM – 8:00 PM","10:00 AM – 8:00 PM","10:00 AM – 4:00 PM","Closed"]},{"n":"Mad River Bar & Grille","a":"126 Chestnut Street","c":"night","t":"bar","x":-75.1435458,"y":39.9481117,"iv":null,"h":null},{"n":"Masala Fusion Indian Restaurant","a":"14 North 3rd Street","c":"eat","t":"restaurant","x":-75.1457584,"y":39.9506658,"iv":[[2160,2340],[2400,2820],[3600,3780],[3840,4260],[5040,5220],[5280,5700],[6480,6660],[6720,7140],[7920,8100],[8160,8580],[9360,9540],[9600,10020]],"h":["Closed","12:00 – 3:00 PM, 4:00 – 11:00 PM","12:00 – 3:00 PM, 4:00 – 11:00 PM","12:00 – 3:00 PM, 4:00 – 11:00 PM","12:00 – 3:00 PM, 4:00 – 11:00 PM","12:00 – 3:00 PM, 4:00 – 11:00 PM","12:00 – 3:00 PM, 4:00 – 11:00 PM"]},{"n":"Mei Mei Philadelphia","a":"33 South 2nd Street","c":"night","t":"night club","x":-75.1438418,"y":39.9489924,"iv":[[1020,1440],[2460,2880],[3900,4320],[5340,5760],[6780,7320],[8220,8760],[9660,10080]],"h":["5:00 PM – 12:00 AM","5:00 PM – 12:00 AM","5:00 PM – 12:00 AM","5:00 PM – 12:00 AM","5:00 PM – 2:00 AM","5:00 PM – 2:00 AM","5:00 PM – 12:00 AM"]},{"n":"Michael Hurwitz Furniture","a":"16 South 3rd Street","c":"shop","t":"home goods store","x":-75.1459873,"y":39.9497602,"iv":null,"h":null},{"n":"Millésimé","a":"33 North 2nd Street","c":"shop","t":"furniture store","x":-75.1430228,"y":39.9508061,"iv":[[2040,2460],[3480,3900],[4920,5340],[6360,6780],[7800,8220]],"h":["Closed","10:00 AM – 5:00 PM","10:00 AM – 5:00 PM","10:00 AM – 5:00 PM","10:00 AM – 5:00 PM","10:00 AM – 5:00 PM","Closed"]},{"n":"Mocha Melt Cafe","a":"124 Market Street","c":"eat","t":"cafe","x":-75.1432823,"y":39.9496671,"iv":[[480,1380],[1920,2820],[3360,4260],[4800,5700],[6240,7200],[7680,8640],[9180,9960]],"h":["8:00 AM – 11:00 PM","8:00 AM – 11:00 PM","8:00 AM – 11:00 PM","8:00 AM – 11:00 PM","8:00 AM – 12:00 AM","8:00 AM – 12:00 AM","9:00 AM – 10:00 PM"]},{"n":"Mochinut","a":"108 Chestnut Street #4","c":"eat","t":"bakery","x":-75.1429316,"y":39.9480853,"iv":[[660,1020],[2100,2580],[3540,4020],[4980,5460],[6420,6900],[7860,8340],[9300,9780]],"h":["11:00 AM – 5:00 PM","11:00 AM – 7:00 PM","11:00 AM – 7:00 PM","11:00 AM – 7:00 PM","11:00 AM – 7:00 PM","11:00 AM – 7:00 PM","11:00 AM – 7:00 PM"]},{"n":"Mr Bar Stool","a":"167 North 2nd Street","c":"shop","t":"furniture store","x":-75.1427226,"y":39.9536541,"iv":[[600,1020],[2040,2460],[3480,3900],[4920,5340],[9240,9660]],"h":["10:00 AM – 5:00 PM","10:00 AM – 5:00 PM","10:00 AM – 5:00 PM","10:00 AM – 5:00 PM","Closed","Closed","10:00 AM – 5:00 PM"]},{"n":"National Mechanics Bar and Restaurant","a":"22 South 3rd Street","c":"eat","t":"restaurant","x":-75.1460133,"y":39.9495544,"iv":[[720,1320],[2160,2880],[3600,4320],[5040,5760],[6480,7320],[7800,8760],[9240,10080]],"h":["12:00 – 10:00 PM","12:00 PM – 12:00 AM","12:00 PM – 12:00 AM","12:00 PM – 12:00 AM","12:00 PM – 2:00 AM","10:00 AM – 2:00 AM","10:00 AM – 12:00 AM"]},{"n":"Nick's Bar & Grille","a":"16 South 2nd Street","c":"night","t":"bar","x":-75.1440453,"y":39.949502,"iv":[[2160,3000],[3600,4440],[5040,5880],[6480,7320],[7920,8760],[9360,10200]],"h":["Closed","12:00 PM – 2:00 AM","12:00 PM – 2:00 AM","12:00 PM – 2:00 AM","12:00 PM – 2:00 AM","12:00 PM – 2:00 AM","12:00 PM – 2:00 AM"]},{"n":"O'Donoghue & O'Donoghue","a":"325 Chestnut Street #515","c":"other","t":"lawyer","x":-75.147154,"y":39.949088,"iv":null,"h":null},{"n":"O.c.p. Grill","a":"100 North 3rd Street","c":"eat","t":"restaurant","x":-75.1454144,"y":39.9523341,"iv":[[660,1080],[2100,2520],[3540,4080],[4980,5580],[6420,7020],[7800,8460],[9300,9840]],"h":["11:00 AM – 6:00 PM","11:00 AM – 6:00 PM","11:00 AM – 8:00 PM","11:00 AM – 9:00 PM","11:00 AM – 9:00 PM","10:00 AM – 9:00 PM","11:00 AM – 8:00 PM"]},{"n":"Old City Beer Garden","a":"240 Market Street","c":"night","t":"bar","x":-75.145341,"y":39.949699,"iv":[[720,1440],[2160,2880],[3600,4320],[5040,5880],[6480,7320],[7920,8760],[9360,9960]],"h":["12:00 PM – 12:00 AM","12:00 PM – 12:00 AM","12:00 PM – 12:00 AM","12:00 PM – 2:00 AM","12:00 PM – 2:00 AM","12:00 PM – 2:00 AM","12:00 – 10:00 PM"]},{"n":"Old City Coffee","a":"221 Church Street","c":"eat","t":"cafe","x":-75.144829,"y":39.95079,"iv":[[420,960],[1860,2400],[3300,3840],[4740,5280],[6180,6780],[7620,8220],[9120,9660]],"h":["7:00 AM – 4:00 PM","7:00 AM – 4:00 PM","7:00 AM – 4:00 PM","7:00 AM – 4:00 PM","7:00 AM – 5:00 PM","7:00 AM – 5:00 PM","8:00 AM – 5:00 PM"]},{"n":"Old City Flowers","a":"31 South 3rd Street","c":"shop","t":"florist","x":-75.145685,"y":39.94938,"iv":[[540,960],[1980,2400],[3420,3840],[4860,5280],[6300,6720],[7740,7980]],"h":["9:00 AM – 4:00 PM","9:00 AM – 4:00 PM","9:00 AM – 4:00 PM","9:00 AM – 4:00 PM","9:00 AM – 4:00 PM","9:00 AM – 1:00 PM","Closed"]},{"n":"Old City Galley","a":"213 Arch Street","c":"shop","t":"furniture store","x":-75.143781,"y":39.952149,"iv":[[600,1080],[2040,2520],[3480,3960],[4920,5400],[6360,6840]],"h":["10:00 AM – 6:00 PM","10:00 AM – 6:00 PM","10:00 AM – 6:00 PM","10:00 AM – 6:00 PM","10:00 AM – 6:00 PM","Closed","Closed"]},{"n":"Old City Kava Company","a":"40 South 2nd Street","c":"night","t":"night club","x":-75.1440697,"y":39.9490103,"iv":[[600,1440],[2040,2880],[3480,4320],[4920,5760],[6360,7320],[7800,8760],[9240,10080]],"h":["10:00 AM – 12:00 AM","10:00 AM – 12:00 AM","10:00 AM – 12:00 AM","10:00 AM – 12:00 AM","10:00 AM – 2:00 AM","10:00 AM – 2:00 AM","10:00 AM – 12:00 AM"]},{"n":"Old City Pizza","a":"100 North 3rd Street","c":"eat","t":"restaurant","x":-75.1453095,"y":39.9523302,"iv":[[660,1080],[2100,2520],[3540,4080],[4980,5580],[6420,7020],[7860,8460],[9300,9810]],"h":["11:00 AM – 6:00 PM","11:00 AM – 6:00 PM","11:00 AM – 8:00 PM","11:00 AM – 9:00 PM","11:00 AM – 9:00 PM","11:00 AM – 9:00 PM","11:00 AM – 7:30 PM"]},{"n":"Olde City Food Market","a":"202 Market Street","c":"eat","t":"grocery or supermarket","x":-75.1440556,"y":39.9497429,"iv":[[510,1200],[1950,2640],[3390,4080],[4830,5520],[6270,7020],[7800,8460],[9240,9840]],"h":["8:30 AM – 8:00 PM","8:30 AM – 8:00 PM","8:30 AM – 8:00 PM","8:30 AM – 8:00 PM","8:30 AM – 9:00 PM","10:00 AM – 9:00 PM","10:00 AM – 8:00 PM"]},{"n":"Olde City Tattoo","a":"50 South 2nd Street","c":"shop","t":"point of interest","x":-75.1441589,"y":39.9487389,"iv":[[720,1200],[2160,2640],[3600,4080],[5040,5520],[6480,7080],[7920,8520],[9360,9780]],"h":["12:00 – 8:00 PM","12:00 – 8:00 PM","12:00 – 8:00 PM","12:00 – 8:00 PM","12:00 – 10:00 PM","12:00 – 10:00 PM","12:00 – 7:00 PM"]},{"n":"Olea","a":"232 Arch Street","c":"eat","t":"restaurant","x":-75.1443869,"y":39.9519494,"iv":[[1020,1260],[5340,5580],[6780,7080],[8220,8520],[9660,9900]],"h":["5:00 – 9:00 PM","Closed","Closed","5:00 – 9:00 PM","5:00 – 10:00 PM","5:00 – 10:00 PM","5:00 – 9:00 PM"]},{"n":"Omoi Life Goods","a":"41 South 3rd Street","c":"shop","t":"clothing store","x":-75.1457587,"y":39.9490452,"iv":[[600,1080],[2040,2520],[3480,3960],[4920,5400],[6360,6840],[7800,8280],[9240,9720]],"h":["10:00 AM – 6:00 PM","10:00 AM – 6:00 PM","10:00 AM – 6:00 PM","10:00 AM – 6:00 PM","10:00 AM – 6:00 PM","10:00 AM – 6:00 PM","10:00 AM – 6:00 PM"]},{"n":"P. J. Clarke’s At The Curtis","a":"601 Walnut Street","c":"night","t":"night club","x":-75.1512346,"y":39.9478619,"iv":[[690,1200],[2130,2640],[3570,4200],[5010,5640],[6450,7140],[7830,8580],[9270,9840]],"h":["11:30 AM – 8:00 PM","11:30 AM – 8:00 PM","11:30 AM – 10:00 PM","11:30 AM – 10:00 PM","11:30 AM – 11:00 PM","10:30 AM – 11:00 PM","10:30 AM – 8:00 PM"]},{"n":"PARISA: Rugs & Décor","a":"PARISA: Rugs & Décor, 33 North 3rd Street","c":"shop","t":"general contractor","x":-75.145325,"y":39.9512029,"iv":[[600,1020],[2040,2460],[3480,3900],[4920,5340],[6360,6780]],"h":["10:00 AM – 5:00 PM","10:00 AM – 5:00 PM","10:00 AM – 5:00 PM","10:00 AM – 5:00 PM","10:00 AM – 5:00 PM","Closed","Closed"]},{"n":"PAWS Adoption Center","a":"100 North 2nd Street","c":"other","t":"point of interest","x":-75.1433661,"y":39.9520741,"iv":[[720,1080],[2160,2520],[3600,3960],[5040,5400],[6480,6840],[7860,8280],[9300,9660]],"h":["12:00 – 6:00 PM","12:00 – 6:00 PM","12:00 – 6:00 PM","12:00 – 6:00 PM","12:00 – 6:00 PM","11:00 AM – 6:00 PM","11:00 AM – 5:00 PM"]},{"n":"Paddy’s","a":"228 Race Street","c":"night","t":"bar","x":-75.1439496,"y":39.9537483,"iv":[[660,1560],[2100,3000],[3540,4440],[4980,5880],[6420,7320],[7860,8760],[9300,10200]],"h":["11:00 AM – 2:00 AM","11:00 AM – 2:00 AM","11:00 AM – 2:00 AM","11:00 AM – 2:00 AM","11:00 AM – 2:00 AM","11:00 AM – 2:00 AM","11:00 AM – 2:00 AM"]},{"n":"Panorama - Wine & Bar","a":"14 North Front Street","c":"night","t":"bar","x":-75.142457,"y":39.9502201,"iv":[[2430,2700],[3870,4140],[5310,5580],[6750,7080],[8100,8520],[9540,9840]],"h":["Closed","4:30 – 9:00 PM","4:30 – 9:00 PM","4:30 – 9:00 PM","4:30 – 10:00 PM","3:00 – 10:00 PM","3:00 – 8:00 PM"]},{"n":"Papery of Philadelphia","a":"18 North 3rd Street","c":"shop","t":"point of interest","x":-75.1458048,"y":39.9507768,"iv":[[2100,2520],[3540,3960],[4980,5400],[6420,6840],[7800,8280]],"h":["Closed","11:00 AM – 6:00 PM","11:00 AM – 6:00 PM","11:00 AM – 6:00 PM","11:00 AM – 6:00 PM","10:00 AM – 6:00 PM","Closed"]},{"n":"Penn's View Hotel","a":"14 North Front Street","c":"stay","t":"lodging","x":-75.1420964,"y":39.9501515,"iv":null,"h":null},{"n":"Perakis Frames","a":"18 Bank Street","c":"shop","t":"point of interest","x":-75.1451999,"y":39.9493829,"iv":null,"h":null},{"n":"Perfumology","a":"25 North 3rd Street","c":"shop","t":"clothing store","x":-75.145258,"y":39.950987,"iv":[[660,1140],[2100,2580],[3540,4020],[4980,5460],[6420,6900],[7860,8340],[9360,9720]],"h":["11:00 AM – 7:00 PM","11:00 AM – 7:00 PM","11:00 AM – 7:00 PM","11:00 AM – 7:00 PM","11:00 AM – 7:00 PM","11:00 AM – 7:00 PM","12:00 – 6:00 PM"]},{"n":"Petit Jardin en Ville","a":"134 North 3rd Street","c":"shop","t":"florist","x":-75.1451876,"y":39.9532701,"iv":[[3600,4020],[6480,6900],[7920,8340],[9360,9660]],"h":["Closed","Closed","12:00 – 7:00 PM","Closed","12:00 – 7:00 PM","12:00 – 7:00 PM","12:00 – 5:00 PM"]},{"n":"Philadelphia Magazine","a":"Philadelphia","c":"other","t":"point of interest","x":-75.1457533,"y":39.9493764,"iv":null,"h":null},{"n":"Philadelphia Marriott Old City","a":"One Dock Street","c":"stay","t":"lodging","x":-75.1434736,"y":39.9462918,"iv":null,"h":null},{"n":"Philadelphia Reads","a":"325 Chestnut Street #903","c":"other","t":"point of interest","x":-75.1474149,"y":39.9491234,"iv":null,"h":null},{"n":"Pierre's Mascots & Costumes","a":"211 North 3rd Street","c":"shop","t":"clothing store","x":-75.1446373,"y":39.9544085,"iv":[[600,1080],[2040,2520],[3480,3960],[4920,5400],[6360,6840]],"h":["10:00 AM – 6:00 PM","10:00 AM – 6:00 PM","10:00 AM – 6:00 PM","10:00 AM – 6:00 PM","10:00 AM – 6:00 PM","Closed","Closed"]},{"n":"Positano Coast by Aldo Lamberti","a":"212 Walnut Street 2nd Floor","c":"night","t":"bar","x":-75.1446126,"y":39.9467646,"iv":[[2130,2730],[3570,4170],[5010,5610],[6450,7110],[7890,8550],[9330,9930]],"h":["Closed","11:30 AM – 9:30 PM","11:30 AM – 9:30 PM","11:30 AM – 9:30 PM","11:30 AM – 10:30 PM","11:30 AM – 10:30 PM","11:30 AM – 9:30 PM"]},{"n":"Princess and Chestnut","a":"124 Chestnut Street","c":"shop","t":"point of interest","x":-75.1434597,"y":39.9480979,"iv":null,"h":null},{"n":"Printdragon","a":"307 Market Street 2nd floor","c":"shop","t":"point of interest","x":-75.1459943,"y":39.9505354,"iv":null,"h":null},{"n":"Race Street Cafe","a":"208 Race Street","c":"eat","t":"restaurant","x":-75.1434501,"y":39.953651,"iv":[[690,1320],[2130,2760],[3570,4200],[5010,5640],[6450,7140],[7830,8580],[9270,9960]],"h":["11:30 AM – 10:00 PM","11:30 AM – 10:00 PM","11:30 AM – 10:00 PM","11:30 AM – 10:00 PM","11:30 AM – 11:00 PM","10:30 AM – 11:00 PM","10:30 AM – 10:00 PM"]},{"n":"Red Owl Tavern","a":"433 Chestnut Street","c":"eat","t":"restaurant","x":-75.1488745,"y":39.949191,"iv":[[420,1380],[1860,2820],[3300,4260],[4740,5700],[6180,7260],[7680,8700],[9180,10020]],"h":["7:00 AM – 11:00 PM","7:00 AM – 11:00 PM","7:00 AM – 11:00 PM","7:00 AM – 11:00 PM","7:00 AM – 1:00 AM","8:00 AM – 1:00 AM","9:00 AM – 11:00 PM"]},{"n":"Renaissance Philadelphia Downtown Hotel","a":"401 Chestnut Street","c":"stay","t":"lodging","x":-75.147661,"y":39.9490544,"iv":null,"h":null},{"n":"Reserve Lounge","a":"724 Arch Street","c":"night","t":"night club","x":-75.1525261,"y":39.9529123,"iv":[[7080,7320],[8520,8760]],"h":["Closed","Closed","Closed","Closed","10:00 PM – 2:00 AM","10:00 PM – 2:00 AM","Closed"]},{"n":"Revolution House","a":"200 Market Street","c":"eat","t":"meal delivery","x":-75.1439347,"y":39.9497317,"iv":[[960,1260],[2400,2700],[3840,4140],[5280,5580],[6720,7080],[7860,8520],[9300,9900]],"h":["4:00 – 9:00 PM","4:00 – 9:00 PM","4:00 – 9:00 PM","4:00 – 9:00 PM","4:00 – 10:00 PM","11:00 AM – 10:00 PM","11:00 AM – 9:00 PM"]},{"n":"Ritz At The Bourse","a":"400 Ranstead Street","c":"culture","t":"movie theater","x":-75.1477118,"y":39.9492886,"iv":null,"h":null},{"n":"Rotten Ralph's Pub & Eatery","a":"201 Chestnut Street","c":"night","t":"bar","x":-75.1441666,"y":39.9484883,"iv":[[720,1560],[2160,3000],[3600,4440],[5040,5880],[6480,7320],[7860,8760],[9300,10200]],"h":["12:00 PM – 2:00 AM","12:00 PM – 2:00 AM","12:00 PM – 2:00 AM","12:00 PM – 2:00 AM","12:00 PM – 2:00 AM","11:00 AM – 2:00 AM","11:00 AM – 2:00 AM"]},{"n":"Royal Boucherie","a":"52 South 2nd Street","c":"night","t":"bar","x":-75.1441173,"y":39.9487112,"iv":[[3540,4320],[4980,5760],[6420,7200],[7800,8640],[9240,10080]],"h":["Closed","Closed","11:00 AM – 12:00 AM","11:00 AM – 12:00 AM","11:00 AM – 12:00 AM","10:00 AM – 12:00 AM","10:00 AM – 12:00 AM"]},{"n":"STARR Restaurants","a":"325 Chestnut Street","c":"eat","t":"restaurant","x":-75.1472135,"y":39.9489001,"iv":[[540,1020],[1980,2460],[3420,3900],[4860,5340],[6300,6780]],"h":["9:00 AM – 5:00 PM","9:00 AM – 5:00 PM","9:00 AM – 5:00 PM","9:00 AM – 5:00 PM","9:00 AM – 5:00 PM","Closed","Closed"]},{"n":"STEAKS","a":"114 State Route 2004","c":"eat","t":"restaurant","x":-75.1428304,"y":39.9496581,"iv":null,"h":null},{"n":"Sababa Falafel","a":"44 North 4th Street","c":"eat","t":"restaurant","x":-75.1474401,"y":39.9513351,"iv":[[690,1200],[2130,2640],[3570,4080],[5010,5520],[9330,9840]],"h":["11:30 AM – 8:00 PM","11:30 AM – 8:00 PM","11:30 AM – 8:00 PM","11:30 AM – 8:00 PM","Closed","Closed","11:30 AM – 8:00 PM"]},{"n":"Sagefrog Marketing Group","a":"PMB 303418, 325-41 Chestnut Street Suite 800","c":"other","t":"point of interest","x":-75.1440215,"y":39.9479285,"iv":[[510,1020],[1950,2460],[3390,3900],[4830,5340],[6270,6780]],"h":["8:30 AM – 5:00 PM","8:30 AM – 5:00 PM","8:30 AM – 5:00 PM","8:30 AM – 5:00 PM","8:30 AM – 5:00 PM","Closed","Closed"]},{"n":"Sassafras","a":"48 South 2nd Street","c":"night","t":"bar","x":-75.1440824,"y":39.948787,"iv":[[960,1560],[2400,3000],[3600,4440],[5040,5880],[6480,7320],[7920,8760],[9360,10200]],"h":["4:00 PM – 2:00 AM","4:00 PM – 2:00 AM","12:00 PM – 2:00 AM","12:00 PM – 2:00 AM","12:00 PM – 2:00 AM","12:00 PM – 2:00 AM","12:00 PM – 2:00 AM"]},{"n":"Scamps","a":"218 Arch Street","c":"eat","t":"restaurant","x":-75.1440835,"y":39.9519617,"iv":[[5280,5580],[6720,7020],[8160,8460],[9600,9900]],"h":["Closed","Closed","Closed","4:00 – 9:00 PM","4:00 – 9:00 PM","4:00 – 9:00 PM","4:00 – 9:00 PM"]},{"n":"Seasons Flowers","a":"211 Arch Street","c":"shop","t":"florist","x":-75.1437579,"y":39.9520989,"iv":[[540,1080],[1980,2520],[3420,3960],[4860,5400],[6300,6840],[7740,8280],[9180,9720]],"h":["9:00 AM – 6:00 PM","9:00 AM – 6:00 PM","9:00 AM – 6:00 PM","9:00 AM – 6:00 PM","9:00 AM – 6:00 PM","9:00 AM – 6:00 PM","9:00 AM – 6:00 PM"]},{"n":"Shane Confectionery","a":"110 Market Street","c":"eat","t":"food","x":-75.1426984,"y":39.9496512,"iv":[[720,1200],[2160,2640],[3600,4080],[5040,5520],[6420,7020],[7860,8460],[9300,9840]],"h":["12:00 – 8:00 PM","12:00 – 8:00 PM","12:00 – 8:00 PM","12:00 – 8:00 PM","11:00 AM – 9:00 PM","11:00 AM – 9:00 PM","11:00 AM – 8:00 PM"]},{"n":"Sonny's Famous Steaks","a":"228 Market Street","c":"eat","t":"restaurant","x":-75.1447906,"y":39.9498291,"iv":[[660,1320],[2100,2760],[3540,4200],[4980,5640],[6420,7080],[7860,8520],[9300,9960]],"h":["11:00 AM – 10:00 PM","11:00 AM – 10:00 PM","11:00 AM – 10:00 PM","11:00 AM – 10:00 PM","11:00 AM – 10:00 PM","11:00 AM – 10:00 PM","11:00 AM – 10:00 PM"]},{"n":"Spadea Lignana Franchise Attorneys","a":"232 North 2nd Street","c":"other","t":"lawyer","x":-75.1430135,"y":39.9548207,"iv":[[480,1080],[1920,2520],[3360,3960],[4800,5400],[6240,6840]],"h":["8:00 AM – 6:00 PM","8:00 AM – 6:00 PM","8:00 AM – 6:00 PM","8:00 AM – 6:00 PM","8:00 AM – 6:00 PM","Closed","Closed"]},{"n":"Spasso Italian Grill","a":"34 South Front Street","c":"night","t":"bar","x":-75.142687,"y":39.948706,"iv":[[2130,2760],[3570,4200],[5010,5640],[6450,7140],[8100,8580],[9480,9900]],"h":["Closed","11:30 AM – 10:00 PM","11:30 AM – 10:00 PM","11:30 AM – 10:00 PM","11:30 AM – 11:00 PM","3:00 – 11:00 PM","2:00 – 9:00 PM"]},{"n":"Starbucks Coffee Company","a":"57-63 North 3rd Street","c":"eat","t":"cafe","x":-75.14514,"y":39.95208,"iv":[[270,1200],[1710,2640],[3150,4080],[4590,5520],[6030,6960],[7500,8400],[8940,9840]],"h":["4:30 AM – 8:00 PM","4:30 AM – 8:00 PM","4:30 AM – 8:00 PM","4:30 AM – 8:00 PM","4:30 AM – 8:00 PM","5:00 AM – 8:00 PM","5:00 AM – 8:00 PM"]},{"n":"Stratus","a":"433 Chestnut Street","c":"night","t":"bar","x":-75.1488772,"y":39.9493554,"iv":[[5340,5760],[6780,7320],[8400,8760]],"h":["Closed","Closed","Closed","5:00 PM – 12:00 AM","5:00 PM – 2:00 AM","8:00 PM – 2:00 AM","Closed"]},{"n":"Sunday Biryani Club","a":"311 Arch Street","c":"eat","t":"restaurant","x":-75.1457003,"y":39.9525297,"iv":[[9360,9540]],"h":["Closed","Closed","Closed","Closed","Closed","Closed","12:00 – 3:00 PM"]},{"n":"The Book Trader","a":"7 North 2nd Street","c":"shop","t":"book store","x":-75.1434542,"y":39.95023,"iv":[[660,1320],[2100,2760],[3540,4200],[4980,5640],[6420,7080],[7860,8520],[9300,9960]],"h":["11:00 AM – 10:00 PM","11:00 AM – 10:00 PM","11:00 AM – 10:00 PM","11:00 AM – 10:00 PM","11:00 AM – 10:00 PM","11:00 AM – 10:00 PM","11:00 AM – 10:00 PM"]},{"n":"The Bourse Food Hall","a":"111 South Independence Ml East","c":"eat","t":"meal delivery","x":-75.1475438,"y":39.9498102,"iv":null,"h":null},{"n":"The Franklin Fountain","a":"116 Market Street","c":"eat","t":"food","x":-75.1428765,"y":39.9495617,"iv":[[660,1440],[2100,2880],[3540,4320],[4980,5760],[6420,7200],[7860,8640],[9300,10080]],"h":["11:00 AM – 12:00 AM","11:00 AM – 12:00 AM","11:00 AM – 12:00 AM","11:00 AM – 12:00 AM","11:00 AM – 12:00 AM","11:00 AM – 12:00 AM","11:00 AM – 12:00 AM"]},{"n":"The Monto","a":"226 Market Street","c":"night","t":"bar","x":-75.1447622,"y":39.9497967,"iv":[[720,1560],[2160,3000],[3600,4440],[5040,5880],[6480,7320],[7920,8760],[9360,10200]],"h":["12:00 PM – 2:00 AM","12:00 PM – 2:00 AM","12:00 PM – 2:00 AM","12:00 PM – 2:00 AM","12:00 PM – 2:00 AM","12:00 PM – 2:00 AM","12:00 PM – 2:00 AM"]},{"n":"The Nye Factory","a":"7 North Christopher Columbus Boulevard Suite 7b","c":"other","t":"point of interest","x":-75.1399222,"y":39.951923,"iv":null,"h":null},{"n":"The Philadelphia Dance Academy","a":"219 Cuthbert Street 3rd Fl","c":"other","t":"gym","x":-75.1444661,"y":39.9514513,"iv":[[510,960],[1950,2400],[3390,3840],[4830,5280],[6270,6720],[7740,7920]],"h":["8:30 AM – 4:00 PM","8:30 AM – 4:00 PM","8:30 AM – 4:00 PM","8:30 AM – 4:00 PM","8:30 AM – 4:00 PM","9:00 AM – 12:00 PM","Closed"]},{"n":"The Plough & the Stars","a":"123 Chestnut Street Entrance on, North 2nd Street","c":"night","t":"bar","x":-75.1439024,"y":39.9486235,"iv":[[720,1560],[2160,3000],[3600,4440],[5040,5880],[6480,7320],[7890,8760],[9330,10200]],"h":["12:00 PM – 2:00 AM","12:00 PM – 2:00 AM","12:00 PM – 2:00 AM","12:00 PM – 2:00 AM","12:00 PM – 2:00 AM","11:30 AM – 2:00 AM","11:30 AM – 2:00 AM"]},{"n":"The Silver Buckle","a":"35 South 2nd Street","c":"night","t":"night club","x":-75.1438482,"y":39.9489438,"iv":[[5400,5880],[6780,7320],[7980,8760],[9420,10080]],"h":["Closed","Closed","Closed","6:00 PM – 2:00 AM","5:00 PM – 2:00 AM","1:00 PM – 2:00 AM","1:00 PM – 12:00 AM"]},{"n":"The UPS Store","a":"51 North 3rd Street","c":"shop","t":"finance","x":-75.145099,"y":39.9516948,"iv":[[480,1110],[1920,2550],[3360,3990],[4800,5430],[6240,6870],[7740,8220],[9240,9540]],"h":["8:00 AM – 6:30 PM","8:00 AM – 6:30 PM","8:00 AM – 6:30 PM","8:00 AM – 6:30 PM","8:00 AM – 6:30 PM","9:00 AM – 5:00 PM","10:00 AM – 3:00 PM"]},{"n":"The Wedding Factor","a":"57 North 3rd Street","c":"shop","t":"clothing store","x":-75.1452012,"y":39.9519038,"iv":[[2100,2520],[3540,4080],[4980,5400],[6420,6840],[7800,8220]],"h":["Closed","11:00 AM – 6:00 PM","11:00 AM – 8:00 PM","11:00 AM – 6:00 PM","11:00 AM – 6:00 PM","10:00 AM – 5:00 PM","Closed"]},{"n":"Tomo Sushi & Ramen","a":"228 Arch Street","c":"eat","t":"restaurant","x":-75.144334,"y":39.9519097,"iv":[[2340,2730],[3780,4170],[5220,5610],[6660,7110],[8100,8550],[9540,9930]],"h":["Closed","3:00 – 9:30 PM","3:00 – 9:30 PM","3:00 – 9:30 PM","3:00 – 10:30 PM","3:00 – 10:30 PM","3:00 – 9:30 PM"]},{"n":"Tu Rinconcito","a":"17 North 3rd Street","c":"eat","t":"restaurant","x":-75.1453145,"y":39.9508207,"iv":[[450,1200],[1890,2640],[3330,4080],[4770,5520],[6210,6960],[7680,8400],[9120,9840]],"h":["7:30 AM – 8:00 PM","7:30 AM – 8:00 PM","7:30 AM – 8:00 PM","7:30 AM – 8:00 PM","7:30 AM – 8:00 PM","8:00 AM – 8:00 PM","8:00 AM – 8:00 PM"]},{"n":"Tuna Bar","a":"205 Race Street","c":"eat","t":"restaurant","x":-75.1434334,"y":39.9539367,"iv":[[2250,2760],[3690,4200],[5130,5640],[6570,7140],[8010,8580],[9450,9960]],"h":["Closed","1:30 – 10:00 PM","1:30 – 10:00 PM","1:30 – 10:00 PM","1:30 – 11:00 PM","1:30 – 11:00 PM","1:30 – 10:00 PM"]},{"n":"UNFRAMED PHL","a":"222 Market Street","c":"night","t":"night club","x":-75.1445743,"y":39.9498776,"iv":[[7080,7320],[8520,8760]],"h":["Closed","Closed","Closed","Closed","10:00 PM – 2:00 AM","10:00 PM – 2:00 AM","Closed"]},{"n":"United States Mint","a":"151 North Independence Mall East","c":"culture","t":"tourist attraction","x":-75.1480581,"y":39.953386,"iv":[[540,990],[1980,2430],[3420,3870],[4860,5310],[6300,6750],[7740,8190]],"h":["9:00 AM – 4:30 PM","9:00 AM – 4:30 PM","9:00 AM – 4:30 PM","9:00 AM – 4:30 PM","9:00 AM – 4:30 PM","9:00 AM – 4:30 PM","Closed"]},{"n":"Vagabond","a":"37 North 3rd Street","c":"shop","t":"clothing store","x":-75.1451228,"y":39.9512981,"iv":[[660,1080],[2100,2520],[3540,3960],[4980,5400],[6420,6840],[7860,8280],[9360,9660]],"h":["11:00 AM – 6:00 PM","11:00 AM – 6:00 PM","11:00 AM – 6:00 PM","11:00 AM – 6:00 PM","11:00 AM – 6:00 PM","11:00 AM – 6:00 PM","12:00 – 5:00 PM"]},{"n":"Vista Peru","a":"20 South 2nd Street","c":"night","t":"bar","x":-75.1440298,"y":39.9494429,"iv":[[720,1380],[5040,5700],[6480,7140],[7920,8580],[9360,10020]],"h":["12:00 – 11:00 PM","Closed","Closed","12:00 – 11:00 PM","12:00 – 11:00 PM","12:00 – 11:00 PM","12:00 – 11:00 PM"]},{"n":"Wax + Wine","a":"144 North 2nd Street","c":"shop","t":"home goods store","x":-75.1433078,"y":39.9531497,"iv":[[2400,2700],[3840,4140],[5280,5580],[6720,7020],[7860,8460],[9300,9720]],"h":["Closed","4:00 – 9:00 PM","4:00 – 9:00 PM","4:00 – 9:00 PM","4:00 – 9:00 PM","11:00 AM – 9:00 PM","11:00 AM – 6:00 PM"]},{"n":"Weitzman National Museum of American Jewish History","a":"101 South Independence Ml East","c":"culture","t":"tourist attraction","x":-75.1485768,"y":39.9502434,"iv":[[3480,3900],[4920,5340],[6360,6780],[7800,8220],[9240,9660]],"h":["Closed","Closed","10:00 AM – 5:00 PM","10:00 AM – 5:00 PM","10:00 AM – 5:00 PM","10:00 AM – 5:00 PM","10:00 AM – 5:00 PM"]},{"n":"Wim May","a":"134 North 3rd Street","c":"other","t":"point of interest","x":-75.1451397,"y":39.9532773,"iv":[[600,1320],[2040,2760],[3480,4200],[4920,5640],[6360,7080],[7800,8520],[9240,9960]],"h":["10:00 AM – 10:00 PM","10:00 AM – 10:00 PM","10:00 AM – 10:00 PM","10:00 AM – 10:00 PM","10:00 AM – 10:00 PM","10:00 AM – 10:00 PM","10:00 AM – 10:00 PM"]},{"n":"Wyndham Philadelphia Historic District","a":"400 Arch Street","c":"stay","t":"lodging","x":-75.1472832,"y":39.9522235,"iv":null,"h":null},{"n":"Xenos Candy N Gifts","a":"231 Chestnut Street","c":"shop","t":"point of interest","x":-75.1452915,"y":39.9486972,"iv":null,"h":null},{"n":"Zahav","a":"237 Saint James Place","c":"eat","t":"restaurant","x":-75.1450162,"y":39.9462333,"iv":[[2460,2730],[3900,4170],[5340,5610],[6780,7050],[8220,8490]],"h":["Closed","5:00 – 9:30 PM","5:00 – 9:30 PM","5:00 – 9:30 PM","5:00 – 9:30 PM","5:00 – 9:30 PM","Closed"]}],"streets":[{"name":"Market St","dir":"ew","v":7.7},{"name":"3rd St","dir":"ns","u":31.2},{"name":"Chestnut St","dir":"ew","v":-132.3},{"name":"Arch St","dir":"ew","v":243.2},{"name":"2nd St","dir":"ns","u":181.4},{"name":"5th St","dir":"ns","u":-221.3},{"name":"Race St","dir":"ew","v":455.5},{"name":"Columbus Blvd","dir":"ns","u":443.0},{"name":"4th St","dir":"ns","u":-118.2},{"name":"Front St","dir":"ns","u":318.4},{"name":"Walnut St","dir":"ew","v":-334.1}],"theta":-10};
+(() => {
+const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+const DAYS_LONG = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+const CATS = [['all','All'],['eat','Food'],['night','Bars & clubs'],['shop','Shops'],['culture','Culture'],['stay','Hotels'],['other','Other']];
+const CATNAME = {eat:'Food',night:'Bars & clubs',shop:'Shops',culture:'Culture',stay:'Hotels',other:'Other'};
+const WEEK = 10080;
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// ---------- projection: rotate the street grid so it sits square ----------
+const lat0 = 39.95, k = Math.cos(lat0*Math.PI/180), th = DATA.theta*Math.PI/180;
+const uv = (lo,la) => { const X=(lo+75.146)*k*111320, Y=(la-lat0)*111320;
+  return [X*Math.cos(-th)-Y*Math.sin(-th), X*Math.sin(-th)+Y*Math.cos(-th)]; };
+const P = DATA.places.map(p => { const [u,v]=uv(p.x,p.y); return {...p,u,v,a:0,tgt:0,vis:1,visT:1,sx:0,sy:0}; });
+let minU=Infinity,maxU=-Infinity,minV=Infinity,maxV=-Infinity;
+{ const q=(a,f)=>{a=[...a].sort((x,y)=>x-y);return a[Math.floor(f*(a.length-1))];}, us=P.map(p=>p.u), vs=P.map(p=>p.v);
+  minU=q(us,.03);maxU=q(us,.97);minV=q(vs,.03);maxV=q(vs,.97); }
+const riverU = (DATA.streets.find(s=>s.name==='Columbus Blvd')||{u:maxU}).u + 40;
+
+// ---------- state ----------
+const now = new Date();
+const st = { day:(now.getDay()+6)%7, min:Math.round((now.getHours()*60+now.getMinutes())/5)*5 % 1440, cat:'all',
+  zoom:1, panX:0, panY:0, playing:false };
+
+// ---------- helpers ----------
+const isOpen = (p,t) => { if(!p.iv) return null;
+  for(const [s,e] of p.iv){ if((t>=s&&t<e)||(t+WEEK>=s&&t+WEEK<e)) return true; } return false; };
+const fmt = m => { m=((m%1440)+1440)%1440; return Math.floor(m/60)+':'+String(m%60).padStart(2,'0'); };
+function nextChange(p,t){
+  if(!p.iv) return null;
+  const open=isOpen(p,t);
+  for(let dt=5;dt<=WEEK;dt+=5){ if(isOpen(p,(t+dt)%WEEK)!==open) return {open,at:(t+dt)%WEEK,dt}; }
+  return {open,at:null};
+}
+function period(m){ const h=m/60;
+  return h<5?'late night':h<8?'early morning':h<12?'morning':h<13?'midday':h<17?'afternoon':h<19?'evening':'night'; }
+const smooth = (a,b,x)=>{ const t=Math.min(1,Math.max(0,(x-a)/(b-a))); return t*t*(3-2*t); };
+// 0 = full daylight, 1 = full night. Morning brightens fast, afternoon dims slowly into evening.
+function dark(m){ const h=m/60;
+  if(h<12) return 1-smooth(5,7.5,h);
+  return smooth(12,20.5,h); }
+const hex = h => [1,3,5].map(i=>parseInt(h.slice(i,i+2),16));
+const mix = (a,b,t) => a.map((v,i)=>Math.round(v+(b[i]-v)*t));
+const BG = [hex('#F5F6F2'),hex('#9AA0AE'),hex('#0F1630')];
+function bgAt(d){ return d<.5?mix(BG[0],BG[1],d*2):mix(BG[1],BG[2],(d-.5)*2); }
+const rgb=c=>`rgb(${c[0]},${c[1]},${c[2]})`, rgba=(c,a)=>`rgba(${c[0]},${c[1]},${c[2]},${a})`;
+const INK_DAY=hex('#1B2033'), INK_NIGHT=hex('#E9ECF5');
+
+// ---------- canvas ----------
+const cv=document.getElementById('map'), ctx=cv.getContext('2d');
+let W=0,H=0,dpr=1,base=1,ox=0,oy=0;
+function resize(){
+  dpr=Math.min(2,window.devicePixelRatio||1); W=innerWidth; H=innerHeight;
+  cv.width=W*dpr; cv.height=H*dpr;
+  const padX=Math.max(48,W*.1), padTop=W<640?Math.min(H*.3,210):Math.min(H*.14,110), padBot=W<640?Math.min(H*.28,190):Math.min(H*.26,180);
+  const spanU=maxU-minU, spanV=maxV-minV;
+  base=Math.min((W-padX*2)/spanU,(H-padTop-padBot)/spanV);
+  ox=W/2-(minU+spanU/2)*base; oy=padTop+(H-padTop-padBot)/2+(minV+spanV/2)*base;
+  sizeHist(); dirty=true;
+}
+const sx=u=>(ox+u*base)*st.zoom+st.panX+(1-st.zoom)*W/2;
+const sy=v=>(oy-v*base)*st.zoom+st.panY+(1-st.zoom)*H/2;
+
+// each business type gets its own light: [daytime dot, night core, glow]
+const COL={eat:['#D9861F','#FFE2B0','#F5A040'],night:['#D2386E','#FFC2DA','#FF4F8E'],shop:['#12908A','#BDFFF6','#2FD3C4'],culture:['#6B4FD6','#D9CFFF','#8E72FF'],stay:['#2F6BD3','#C9E0FF','#4F8DFF'],other:['#5A9530','#E0FFC2','#8BD34A']};
+const halos={};
+for(const [key,c] of Object.entries(COL)){ const hc2=document.createElement('canvas'); hc2.width=hc2.height=128;
+  const g=hc2.getContext('2d'), r=g.createRadialGradient(64,64,0,64,64,64), [cr,cg,cb]=hex(c[2]), [lr,lg,lb]=hex(c[1]);
+  r.addColorStop(0,`rgba(${lr},${lg},${lb},1)`); r.addColorStop(.12,`rgba(${cr},${cg},${cb},.85)`);
+  r.addColorStop(.38,`rgba(${cr},${cg},${cb},.28)`); r.addColorStop(1,`rgba(${cr},${cg},${cb},0)`);
+  g.fillStyle=r; g.fillRect(0,0,128,128); halos[key]=hc2; }
+
+let dirty=true;
+function draw(){
+  const d=dark(st.min), bg=bgAt(d), ink=mix(INK_DAY,INK_NIGHT,d>.5?1:0), z=st.zoom;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.globalCompositeOperation='source-over'; ctx.globalAlpha=1;
+  ctx.fillStyle=rgb(bg); ctx.fillRect(0,0,W,H);
+
+  // river
+  const rx=sx(riverU);
+  if(rx<W){ ctx.fillStyle=rgb(mix(bg,hex('#3E6A8A'),d>.5?.22:.16)); ctx.fillRect(rx,0,W-rx,H);
+    ctx.save(); ctx.translate(Math.min(W-24,rx+28),H*.42); ctx.rotate(Math.PI/2);
+    ctx.font=`italic 300 15px ${getComputedStyle(document.body).getPropertyValue('--display')}`;
+    ctx.fillStyle=rgba(ink,.35); ctx.fillText('Delaware River',0,0); ctx.restore(); }
+
+  // streets
+  const lineC = mix(bg, d>.5?hex('#7C8BC4'):hex('#1B2033'), d>.5?.22:.18);
+  ctx.lineWidth=Math.min(12,Math.max(1.2,base*z*5)); ctx.strokeStyle=rgb(lineC); ctx.lineCap='butt';
+  ctx.font=`500 11px ${getComputedStyle(document.body).getPropertyValue('--ui')}`;
+  for(const s of DATA.streets){
+    ctx.beginPath();
+    if(s.dir==='ew'){ const y=sy(s.v); ctx.moveTo(0,y); ctx.lineTo(Math.min(W,rx),y); }
+    else { const x=sx(s.u); ctx.moveTo(x,0); ctx.lineTo(x,H); }
+    ctx.stroke();
+  }
+  ctx.fillStyle=rgba(ink,.42);
+  for(const s of DATA.streets){
+    if(s.dir==='ew'){ const y=sy(s.v); ctx.fillText(s.name,Math.max(14,sx(minU)-110),y-6); }
+    else { const x=sx(s.u); ctx.save(); ctx.translate(x-6,Math.min(H-170,sy(minV)+90)); ctx.rotate(-Math.PI/2); ctx.fillText(s.name,0,0); ctx.restore(); }
+  }
+
+  // compute screen positions
+  for(const p of P){ p.sx=sx(p.u); p.sy=sy(p.v); }
+
+  // closed rings + no-data dots
+  const ringC=mix(hex('#8E9288'),hex('#55608A'),d);
+  ctx.lineWidth=1.3;
+  for(const p of P){ if(p.vis<.02) continue;
+    if(!p.iv){ ctx.fillStyle=rgba(ringC,.55*p.vis); ctx.beginPath(); ctx.arc(p.sx,p.sy,1.6,0,7); ctx.fill(); continue; }
+    const c=(1-p.a)*p.vis; if(c<.02) continue;
+    ctx.strokeStyle=rgba(ringC,.9*c); ctx.beginPath(); ctx.arc(p.sx,p.sy,3.4,0,7); ctx.stroke(); }
+
+  // halos: soft on paper by day, additive glow by night
+  const R=(9+34*d)*Math.sqrt(z), haloA=.22+.5*d;
+  ctx.globalCompositeOperation = d>.35 ? 'screen' : 'multiply';
+  for(const p of P){ const a=p.a*p.vis; if(a<.02) continue;
+    ctx.globalAlpha=a*(d>.35?haloA:.55); ctx.drawImage(halos[p.c],p.sx-R,p.sy-R,R*2,R*2); }
+  ctx.globalCompositeOperation='source-over';
+  // cores
+  for(const p of P){ const a=p.a*p.vis; if(a<.02) continue;
+    ctx.globalAlpha=a; ctx.fillStyle=rgb(mix(hex(COL[p.c][0]),hex(COL[p.c][1]),d)); ctx.beginPath(); ctx.arc(p.sx,p.sy,3.3,0,7); ctx.fill(); }
+  ctx.globalAlpha=1;
+
+  if(hover){ ctx.strokeStyle=rgba(ink,.85); ctx.lineWidth=1.5; ctx.beginPath(); ctx.arc(hover.sx,hover.sy,9,0,7); ctx.stroke(); }
+}
+
+function tick(){
+  let moving=false;
+  for(const p of P){
+    const k=reduce?1:.2;
+    const na=p.a+(p.tgt-p.a)*k, nv=p.vis+(p.visT-p.vis)*k;
+    if(Math.abs(na-p.tgt)>.004||Math.abs(nv-p.visT)>.004) moving=true;
+    p.a=Math.abs(na-p.tgt)>.004?na:p.tgt; p.vis=Math.abs(nv-p.visT)>.004?nv:p.visT;
+  }
+  if(moving||dirty){ draw(); dirty=false; }
+  if(st.playing) advance();
+  requestAnimationFrame(tick);
+}
+
+// ---------- UI ----------
+const $=id=>document.getElementById(id);
+const timeIn=$('time');
+function update(){
+  const t=st.day*1440+st.min, d=dark(st.min);
+  let n=0,all=0;
+  for(const p of P){ const inCat=st.cat==='all'||p.c===st.cat; p.visT=inCat?1:.06;
+    const o=isOpen(p,t); p.tgt=o?1:0; if(inCat&&p.iv){all++; if(o) n++;} }
+  $('nOpen').textContent=n; $('nAll').textContent=all; updateDash(t,d);
+  $('clock').textContent=fmt(st.min);
+  $('when').textContent=DAYS_LONG[st.day]+' '+period(st.min);
+  timeIn.value=st.min; timeIn.setAttribute('aria-valuetext',DAYS[st.day]+' '+fmt(st.min));
+  // chrome theme follows the sky
+  const bg=bgAt(d), night=d>.5, root=document.documentElement.style;
+  root.setProperty('--bg',rgb(bg));
+  root.setProperty('--fg',night?'#E9ECF5':'#1B2033');
+  root.setProperty('--muted',night?'rgba(233,236,245,.62)':'rgba(27,32,51,.62)');
+  root.setProperty('--panel',rgba(night?mix(bg,hex('#0A0F22'),.4):mix(bg,[255,255,255],.5),night?.62:.72));
+  root.setProperty('--line',night?'rgba(233,236,245,.16)':'rgba(27,32,51,.14)');
+  document.documentElement.style.colorScheme=night?'dark':'light';
+  drawHist(); if(hover) showTip(hover); dirty=true;
+}
+
+// days + cats
+const daysEl=$('days'), catsEl=$('cats');
+DAYS.forEach((n,i)=>{ const b=document.createElement('button'); b.className='chip'; b.textContent=n;
+  b.onclick=()=>{st.day=i; syncChips(); computeHist(); update();}; daysEl.appendChild(b); });
+CATS.forEach(([k,n])=>{ const b=document.createElement('button'); b.className='chip'; b.dataset.k=k;
+  if(k!=='all'){ const s=document.createElement('i'); s.className='sw'; s.style.background=COL[k][2]; b.appendChild(s); }
+  b.appendChild(document.createTextNode(n));
+  b.onclick=()=>{st.cat=k; syncChips(); computeHist(); update();}; catsEl.appendChild(b); });
+// dashboard: share of open places by type
+const dashCats=CATS.filter(c=>c[0]!=='all'), rowsEl=$('rows'), stackEl=$('stack'), rowRefs={};
+dashCats.forEach(([k,n])=>{ const r=document.createElement('div'); r.className='r';
+  r.innerHTML='<span class="lb"><i class="sw"></i></span><span class="bar"><i></i></span><span class="pc">0%</span>';
+  r.querySelector('.lb').appendChild(document.createTextNode(n));
+  rowsEl.appendChild(r); const s=document.createElement('span'); stackEl.appendChild(s);
+  rowRefs[k]={r,sw:r.querySelector('.sw'),fill:r.querySelector('.bar i'),pc:r.querySelector('.pc'),seg:s}; });
+function updateDash(t,d){
+  const cnt={}; let tot=0;
+  for(const p of P){ if(p.iv&&isOpen(p,t)){ cnt[p.c]=(cnt[p.c]||0)+1; tot++; } }
+  const ci=d>.5?2:0;
+  for(const [k] of dashCats){ const R=rowRefs[k], c=cnt[k]||0, pct=tot?c/tot*100:0, col=COL[k][ci];
+    R.fill.style.width=pct+'%'; R.fill.style.background=col; R.sw.style.background=col;
+    R.seg.style.width=pct+'%'; R.seg.style.background=col;
+    R.pc.textContent=Math.round(pct)+'%'; R.r.title=`${c} open`;
+    R.r.style.opacity=(st.cat==='all'||st.cat===k)?1:.35; }
+  $('dashNote').textContent=tot?`Share of the ${tot} places open now`:'Nothing is open right now';
+}
+function syncChips(){ [...daysEl.children].forEach((b,i)=>b.setAttribute('aria-pressed',i===st.day));
+  [...catsEl.children].forEach(b=>b.setAttribute('aria-pressed',b.dataset.k===st.cat)); }
+const naCount=P.filter(p=>!p.iv).length; $('naNote').firstChild.textContent=`${naCount} with no hours listed`;
+
+timeIn.addEventListener('input',()=>{ st.min=+timeIn.value; update(); });
+
+// histogram of open places across the chosen day
+const hc=$('hist'), hx=hc.getContext('2d'); let hist=[], hmax=1;
+function computeHist(){ hist=[]; for(let m=0;m<1440;m+=15){ const t=st.day*1440+m; let n=0;
+  for(const p of P) if((st.cat==='all'||p.c===st.cat)&&isOpen(p,t)) n++; hist.push(n); }
+  hmax=Math.max(1,...hist); }
+function sizeHist(){ const r=hc.getBoundingClientRect(); hc.width=r.width*dpr; hc.height=r.height*dpr; drawHist(); }
+function drawHist(){ if(!hist.length) return; const w=hc.width/dpr,h=hc.height/dpr; hx.setTransform(dpr,0,0,dpr,0,0); hx.clearRect(0,0,w,h);
+  const night=dark(st.min)>.5, bw=w/hist.length, cur=Math.floor(st.min/15);
+  hist.forEach((n,i)=>{ const bh=Math.max(1,(n/hmax)*(h-6));
+    hx.fillStyle = i===cur?'#F0A23A':(night?'rgba(233,236,245,.22)':'rgba(27,32,51,.16)');
+    hx.fillRect(i*bw+.5,h-bh,Math.max(1,bw-1.2),bh); }); }
+
+// play
+let lastStep=0;
+function advance(){ const t=performance.now(); if(t-lastStep<60) return; lastStep=t;
+  st.min+=5; if(st.min>=1440){ st.min=0; st.day=(st.day+1)%7; syncChips(); computeHist(); } update(); }
+$('play').onclick=()=>{ st.playing=!st.playing;
+  $('playIcon').innerHTML=st.playing?'<path d="M2.5 1.5h3.2v11H2.5zM8.3 1.5h3.2v11H8.3z"/>':'<path d="M3 1.5v11l9.5-5.5z"/>';
+  $('play').setAttribute('aria-label',st.playing?'Pause':'Play through the day'); };
+
+// tooltip + hover
+const tip=$('tip'); let hover=null;
+function pick(x,y){ let best=null,bd=16*16; for(const p of P){ if(p.visT<.5) continue; const dx=p.sx-x,dy=p.sy-y,dd=dx*dx+dy*dy; if(dd<bd){bd=dd;best=p;} } return best; }
+function showTip(p){
+  const t=st.day*1440+st.min, nc=nextChange(p,t);
+  let s,cls='';
+  if(!p.iv) s='No hours listed';
+  else if(nc.at===null) s = nc.open?'Open':'Closed all week';
+  else { const cd=Math.floor(nc.at/1440), pre = (cd===st.day&&nc.dt<1440)?'':(cd===(st.day+1)%7&&nc.dt<1440)?'tomorrow ':DAYS[cd]+' ';
+    if(nc.open){ cls='open'; s=`Open, closes ${pre}${fmt(nc.at)}`; } else s=`Closed, opens ${pre}${fmt(nc.at)}`; }
+  const hrs=p.h?`${DAYS_LONG[st.day]}: ${p.h[st.day]}`:'';
+  tip.innerHTML=`<h3></h3><div class="t"></div><div class="s ${cls}"></div><div class="hrs"></div>`;
+  tip.querySelector('h3').textContent=p.n;
+  tip.querySelector('.t').textContent=`${CATNAME[p.c]} (${p.t}), ${p.a}`;
+  tip.querySelector('.s').textContent=s; tip.querySelector('.s').style.color = cls ? COL[p.c][dark(st.min)>.5?2:0] : ''; tip.querySelector('.hrs').textContent=hrs;
+  const r=tip.getBoundingClientRect(); let x=p.sx+16, y=p.sy-r.height/2;
+  if(x+r.width>W-12) x=p.sx-16-r.width; y=Math.max(12,Math.min(H-r.height-12,y));
+  tip.style.left=x+'px'; tip.style.top=y+'px'; tip.classList.add('on');
+}
+function hideTip(){ tip.classList.remove('on'); }
+
+// pan / zoom / pick with pointers
+const ptrs=new Map(); let drag=null, pinch=null, moved=false;
+cv.addEventListener('pointerdown',e=>{ cv.setPointerCapture(e.pointerId); ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY}); moved=false;
+  if(ptrs.size===1) drag={x:e.clientX,y:e.clientY,px:st.panX,py:st.panY};
+  if(ptrs.size===2){ const [a,b]=[...ptrs.values()]; pinch={d:Math.hypot(a.x-b.x,a.y-b.y),z:st.zoom}; drag=null; } });
+cv.addEventListener('pointermove',e=>{
+  if(ptrs.has(e.pointerId)) ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(pinch&&ptrs.size===2){ const [a,b]=[...ptrs.values()]; setZoom(pinch.z*Math.hypot(a.x-b.x,a.y-b.y)/pinch.d,(a.x+b.x)/2,(a.y+b.y)/2); moved=true; return; }
+  if(drag){ const dx=e.clientX-drag.x, dy=e.clientY-drag.y; if(Math.abs(dx)+Math.abs(dy)>4){moved=true;cv.classList.add('dragging');}
+    if(moved){ st.panX=drag.px+dx; st.panY=drag.py+dy; dirty=true; hover=null; hideTip(); } return; }
+  if(e.pointerType==='mouse'){ const p=pick(e.clientX,e.clientY); if(p!==hover){ hover=p; dirty=true; p?showTip(p):hideTip(); cv.style.cursor=p?'pointer':''; } }
+});
+const up=e=>{ ptrs.delete(e.pointerId); if(ptrs.size<2) pinch=null; cv.classList.remove('dragging');
+  if(drag&&!moved&&e.type==='pointerup'){ const p=pick(e.clientX,e.clientY); hover=p; dirty=true; p?showTip(p):hideTip(); }
+  drag=null; };
+cv.addEventListener('pointerup',up); cv.addEventListener('pointercancel',up);
+cv.addEventListener('pointerleave',e=>{ if(e.pointerType==='mouse'&&!drag){ hover=null; hideTip(); dirty=true; } });
+function setZoom(z,cx,cy){ z=Math.min(5,Math.max(.7,z));
+  // keep the point under the cursor fixed
+  const f=z/st.zoom; st.panX=cx-(cx-st.panX-(1-st.zoom)*W/2)*f-(1-z)*W/2; st.panY=cy-(cy-st.panY-(1-st.zoom)*H/2)*f-(1-z)*H/2;
+  st.zoom=z; dirty=true; hideTip(); hover=null; }
+cv.addEventListener('wheel',e=>{ e.preventDefault(); setZoom(st.zoom*Math.exp(-e.deltaY*.0015),e.clientX,e.clientY); },{passive:false});
+cv.addEventListener('dblclick',()=>{ st.zoom=1; st.panX=st.panY=0; dirty=true; });
+
+// keyboard: arrows move time when map is focused-ish
+addEventListener('keydown',e=>{ if(e.target.tagName==='INPUT'||e.target.tagName==='BUTTON') return;
+  if(e.key==='ArrowRight'){ st.min=(st.min+15)%1440; update(); } if(e.key==='ArrowLeft'){ st.min=(st.min+1425)%1440; update(); }
+  if(e.key===' '){ e.preventDefault(); $('play').click(); } });
+
+addEventListener('resize',resize);
+syncChips(); computeHist(); resize(); update();
+for(const p of P) { p.a=p.tgt; p.vis=p.visT; }
+if(document.fonts) document.fonts.ready.then(()=>{dirty=true;});
+requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
